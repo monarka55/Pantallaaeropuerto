@@ -1,5 +1,3 @@
-Pantalla de Vuelos de Aeropuerto (FIDS)
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
