@@ -1,0 +1,370 @@
+Pantalla de Vuelos de Aeropuerto (FIDS)
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tablero FIDS de Aeropuerto - Salidas y Llegadas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #080c14;
+            color: #e2e8f0;
+        }
+        .font-fids {
+            font-family: 'Share Tech Mono', monospace;
+        }
+        .fids-container {
+            background: radial-gradient(circle at center, #111827 0%, #080c14 100%);
+            border: 2px solid #1e293b;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(255, 255, 255, 0.02);
+        }
+        /* LED Status Colors */
+        .status-on-time { color: #10b981; text-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+        .status-boarding { color: #f59e0b; text-shadow: 0 0 10px rgba(245, 158, 11, 0.8); animation: pulse-led 1s infinite alternate; }
+        .status-delayed { color: #ef4444; text-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+        .status-landed { color: #3b82f6; text-shadow: 0 0 8px rgba(59, 130, 246, 0.5); }
+        .status-cancelled { color: #64748b; }
+        
+        @keyframes pulse-led {
+            from { opacity: 0.6; }
+            to { opacity: 1; }
+        }
+        
+        /* Table Row Hover */
+        .fids-row {
+            transition: all 0.5s ease-in-out;
+        }
+        .fids-row:hover {
+            background-color: rgba(30, 41, 59, 0.6);
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b1120;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-3 sm:p-5 select-none">
+
+    <!-- HEADER DE LA TERMINAL -->
+    <header class="max-w-[1700px] mx-auto w-full mb-3">
+        <div class="fids-container rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-amber-400 text-2xl sm:text-3xl shadow-inner">
+                    <i class="fa-solid fa-plane"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl md:text-2xl font-black tracking-widest text-slate-100 uppercase flex items-center gap-3">
+                        AEROPUERTO INTERNACIONAL
+                        <span class="text-[10px] font-fids bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded uppercase tracking-wider">DUAL FIDS</span>
+                    </h1>
+                    <p class="text-slate-400 text-xs font-medium">Pantalla Dividida de Salidas y Llegadas en Tiempo Real</p>
+                </div>
+            </div>
+
+            <!-- BUSCADOR & CONTROLES -->
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <div class="relative w-full sm:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                    <input type="text" id="search-input" oninput="filterFlights()" placeholder="Filtrar vuelo, ciudad, puerta..." class="w-full bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs font-fids text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-all">
+                </div>
+
+                <!-- RELOJ DIGITAL -->
+                <div class="flex items-center gap-3 font-fids bg-slate-900/80 border border-slate-800/80 px-3 py-1.5 rounded-xl">
+                    <div class="text-right">
+                        <div id="clock-display" class="text-xl sm:text-2xl font-bold text-amber-400 tracking-wider">00:00:00</div>
+                        <div id="date-display" class="text-[10px] text-slate-400 uppercase tracking-widest">--/--/----</div>
+                    </div>
+                    <button onclick="playChime()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-amber-500/50 text-amber-400 p-2 rounded-lg transition-all text-xs font-bold" title="Probar chime">
+                        <i class="fa-solid fa-bell"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- TABLERO DIVIDIDO (ARRIVALS & DEPARTURES) -->
+    <main class="max-w-[1700px] mx-auto w-full flex-grow mb-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
+        <!-- SECCIÓN LLEGADAS (ARRIVALS) - IZQUIERDA -->
+        <div class="fids-container rounded-2xl border border-slate-800 overflow-hidden flex flex-col shadow-2xl">
+            <div class="bg-sky-500 text-slate-950 px-4 py-3 font-bold text-sm sm:text-base flex items-center justify-between tracking-widest uppercase">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-plane-arrival"></i> LLEGADAS / ARRIVALS
+                </div>
+                <span class="text-xs bg-slate-950/20 px-2 py-0.5 rounded font-fids" id="count-arrivals">0 VUELOS</span>
+            </div>
+
+            <div class="overflow-x-auto flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900/90 border-b border-slate-800 text-[11px] font-fids text-slate-400 uppercase tracking-wider">
+                            <th class="py-3 px-3">Hora</th>
+                            <th class="py-3 px-3">Vuelo</th>
+                            <th class="py-3 px-3">Origen</th>
+                            <th class="py-3 px-3 text-center">Puerta</th>
+                            <th class="py-3 px-3">Estado</th>
+                            <th class="py-3 px-3 text-center">Audio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="arrivals-table-body" class="font-fids divide-y divide-slate-800/50 text-xs sm:text-sm">
+                        <!-- Filas dinámicas de llegadas -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN SALIDAS (DEPARTURES) - DERECHA -->
+        <div class="fids-container rounded-2xl border border-slate-800 overflow-hidden flex flex-col shadow-2xl">
+            <div class="bg-amber-500 text-slate-950 px-4 py-3 font-bold text-sm sm:text-base flex items-center justify-between tracking-widest uppercase">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-plane-departure"></i> SALIDAS / DEPARTURES
+                </div>
+                <span class="text-xs bg-slate-950/20 px-2 py-0.5 rounded font-fids" id="count-departures">0 VUELOS</span>
+            </div>
+
+            <div class="overflow-x-auto flex-grow">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-900/90 border-b border-slate-800 text-[11px] font-fids text-slate-400 uppercase tracking-wider">
+                            <th class="py-3 px-3">Hora</th>
+                            <th class="py-3 px-3">Vuelo</th>
+                            <th class="py-3 px-3">Destino</th>
+                            <th class="py-3 px-3 text-center">Puerta</th>
+                            <th class="py-3 px-3">Estado</th>
+                            <th class="py-3 px-3 text-center">Audio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="departures-table-body" class="font-fids divide-y divide-slate-800/50 text-xs sm:text-sm">
+                        <!-- Filas dinámicas de salidas -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- FOOTER INFORMATIVO -->
+    <footer class="max-w-[1700px] mx-auto w-full text-center py-2.5 border-t border-slate-800/80 text-xs text-slate-500 font-fids flex flex-col sm:flex-row justify-between items-center gap-2">
+        <div>SYSTEM FIDS DUAL DISPLAY • FLIGHT INFORMATION DISPLAY BOARD</div>
+        <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            ACTUALIZACIÓN EN TIEMPO REAL
+        </div>
+    </footer>
+
+    <!-- LÓGICA JAVASCRIPT -->
+    <script>
+        let audioCtx = null;
+
+        // PRIORIDADES DE ESTADO PARA ORDENAR DE ARRIBA A ABAJO
+        const statusPriority = {
+            'BOARDING': 1,   // Abordando arriba de todo en Salidas
+            'LANDED': 1,     // Aterrizó arriba de todo en Llegadas
+            'ON TIME': 2,    // En Hora
+            'DELAYED': 3,    // Demorado
+            'CANCELLED': 4   // Cancelado abajo
+        };
+
+        // BASE DE DATOS DE VUELOS
+        const flightsData = {
+            departures: [
+                { time: "18:00", flight: "MEX-5507", airline: "Boeing 787 VIP", location: "HBD (Happy Birthday)", gate: "01", status: "BOARDING", text: "Abordaje 17:20" },
+                { time: "14:15", flight: "MX-5507", airline: "Aeroméxico", location: "Madrid (MAD)", gate: "01", status: "BOARDING", text: "Abordando" },
+                { time: "14:30", flight: "IB-6402", airline: "Iberia", location: "Barcelona (BCN)", gate: "12", status: "ON TIME", text: "En Hora" },
+                { time: "14:45", flight: "AA-1204", airline: "American Airlines", location: "Miami (MIA)", gate: "05", status: "ON TIME", text: "En Hora" },
+                { time: "15:00", flight: "AF-0178", airline: "Air France", location: "París (CDG)", gate: "08", status: "DELAYED", text: "Demorado 15m" },
+                { time: "15:20", flight: "AV-0084", airline: "Avianca", location: "Bogotá (BOG)", gate: "14", status: "ON TIME", text: "En Hora" },
+                { time: "15:40", flight: "DL-0582", airline: "Delta", location: "Atlanta (ATL)", gate: "03", status: "CANCELLED", text: "Cancelado" },
+                { time: "16:05", flight: "LA-2410", airline: "LATAM", location: "Santiago (SCL)", gate: "19", status: "ON TIME", text: "En Hora" },
+                { time: "16:30", flight: "LH-0498", airline: "Lufthansa", location: "Frankfurt (FRA)", gate: "21", status: "ON TIME", text: "En Hora" }
+            ],
+            arrivals: [
+                { time: "14:05", flight: "AM-0401", airline: "Aeroméxico", location: "Nueva York (JFK)", gate: "04", status: "LANDED", text: "Aterrizó" },
+                { time: "14:20", flight: "UX-0041", airline: "Air Europa", location: "Madrid (MAD)", gate: "02", status: "LANDED", text: "Aterrizó" },
+                { time: "14:50", flight: "CM-0358", airline: "Copa Airlines", location: "Panamá (PTY)", gate: "09", status: "ON TIME", text: "En Aproximación" },
+                { time: "15:15", flight: "UA-1092", airline: "United Airlines", location: "Houston (IAH)", gate: "11", status: "DELAYED", text: "Demorado 20m" },
+                { time: "15:35", flight: "AR-1302", airline: "Aerolíneas Arg.", location: "Buenos Aires (EZE)", gate: "16", status: "ON TIME", text: "En Hora" },
+                { time: "16:00", flight: "VB-1104", airline: "VivaAerobus", location: "Cancún (CUN)", gate: "07", status: "ON TIME", text: "En Hora" },
+                { time: "16:25", flight: "KL-0685", airline: "KLM", location: "Ámsterdam (AMS)", gate: "15", status: "ON TIME", text: "En Hora" },
+                { time: "16:50", flight: "BA-0243", airline: "British Airways", location: "Londres (LHR)", gate: "18", status: "ON TIME", text: "En Hora" }
+            ]
+        };
+
+        // RENDERIZAR TABLAS DIVIDIDAS Y ORDENADAS POR ESTADO Y HORA
+        function renderFlights() {
+            const searchVal = document.getElementById('search-input').value.toLowerCase().trim();
+
+            renderTable('departures-table-body', flightsData.departures, searchVal, 'count-departures');
+            renderTable('arrivals-table-body', flightsData.arrivals, searchVal, 'count-arrivals');
+        }
+
+        function renderTable(tbodyId, data, searchVal, countId) {
+            const tbody = document.getElementById(tbodyId);
+            tbody.innerHTML = '';
+
+            // Filtrar y ordenar dinámicamente por prioridad de estado
+            const sortedList = [...data]
+                .filter(item => {
+                    return item.flight.toLowerCase().includes(searchVal) ||
+                           item.location.toLowerCase().includes(searchVal) ||
+                           item.airline.toLowerCase().includes(searchVal) ||
+                           item.gate.toLowerCase().includes(searchVal);
+                })
+                .sort((a, b) => {
+                    const prioA = statusPriority[a.status] || 99;
+                    const prioB = statusPriority[b.status] || 99;
+                    if (prioA !== prioB) return prioA - prioB;
+                    return a.time.localeCompare(b.time); // Si tienen el mismo estado, ordenar por hora
+                });
+
+            document.getElementById(countId).innerText = `${sortedList.length} VUELOS`;
+
+            sortedList.forEach((item) => {
+                let statusClass = '';
+                if (item.status === 'ON TIME') statusClass = 'status-on-time';
+                else if (item.status === 'BOARDING') statusClass = 'status-boarding';
+                else if (item.status === 'DELAYED') statusClass = 'status-delayed';
+                else if (item.status === 'LANDED') statusClass = 'status-landed';
+                else if (item.status === 'CANCELLED') statusClass = 'status-cancelled';
+
+                const tr = document.createElement('tr');
+                tr.className = 'fids-row text-slate-200 border-b border-slate-800/40';
+                tr.innerHTML = `
+                    <td class="py-3 px-3 font-bold text-amber-400">${item.time}</td>
+                    <td class="py-3 px-3 font-bold text-slate-100">${item.flight}</td>
+                    <td class="py-3 px-3 text-slate-200 font-semibold">${item.location}</td>
+                    <td class="py-3 px-3 text-center font-bold text-amber-300">${item.gate}</td>
+                    <td class="py-3 px-3 font-bold ${statusClass}">${item.text.toUpperCase()}</td>
+                    <td class="py-3 px-3 text-center">
+                        <button onclick="announceFlight('${item.flight}', '${item.location}', '${item.gate}', '${item.status}')" class="bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-amber-400 px-2 py-1.5 rounded text-xs transition-all" title="Anunciar por megafonía">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // SIMULACIÓN EN TIEMPO REAL: CAMBIAR ESTADOS ALEATORIAMENTE CADA 12 SEGUNDOS
+        function simulateStatusChanges() {
+            const departureStatuses = [
+                { status: "BOARDING", text: "Abordando" },
+                { status: "ON TIME", text: "En Hora" },
+                { status: "DELAYED", text: "Demorado 10m" }
+            ];
+
+            // Seleccionar un vuelo aleatorio de salidas para cambiar su estado y reordenar la tabla
+            const randomIndex = Math.floor(Math.random() * flightsData.departures.length);
+            const randomStatus = departureStatuses[Math.floor(Math.random() * departureStatuses.length)];
+            
+            flightsData.departures[randomIndex].status = randomStatus.status;
+            flightsData.departures[randomIndex].text = randomStatus.text;
+
+            renderFlights();
+        }
+
+        // REPETIR SIMULACIÓN DE REORDENAMIENTO CADA 8 SEGUNDOS
+        setInterval(simulateStatusChanges, 8000);
+
+        function filterFlights() {
+            renderFlights();
+        }
+
+        // CHIME DE AEROPUERTO SINTETIZADO (WEB AUDIO API)
+        function playChime() {
+            return new Promise((resolve) => {
+                if (!audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContextClass();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const notes = [
+                    { freq: 523.25, time: 0.0, duration: 0.5 },
+                    { freq: 659.25, time: 0.25, duration: 0.5 },
+                    { freq: 783.99, time: 0.50, duration: 0.5 },
+                    { freq: 1046.50, time: 0.75, duration: 1.0 }
+                ];
+
+                const now = audioCtx.currentTime;
+
+                notes.forEach((note) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(note.freq, now + note.time);
+
+                    gain.gain.setValueAtTime(0, now + note.time);
+                    gain.gain.linearRampToValueAtTime(0.3, now + note.time + 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + note.time + note.duration);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start(now + note.time);
+                    osc.stop(now + note.time + note.duration);
+                });
+
+                setTimeout(resolve, 1600);
+            });
+        }
+
+        // LOCUCIÓN DE ANUNCIO DE VUELO (WEB SPEECH API)
+        async function announceFlight(flight, location, gate, status) {
+            await playChime();
+
+            let message = "";
+            const flightClean = flight.split('').join(' ');
+
+            if (status === 'BOARDING') {
+                message = `Atención pasajeros. El vuelo ${flightClean} con destino a ${location} se encuentra en proceso de abordaje por la puerta ${gate}.`;
+            } else if (status === 'DELAYED') {
+                message = `Atención por favor. El vuelo ${flightClean} con destino a ${location} se encuentra retrasado. Informaremos oportunamente.`;
+            } else if (status === 'LANDED') {
+                message = `Anuncio de llegada. El vuelo ${flightClean} procedente de ${location} ha aterrizado. Pasajeros dirigirse a la puerta ${gate}.`;
+            } else {
+                message = `Atención pasajeros del vuelo ${flightClean} con destino a ${location}, por favor estén atentos a la puerta de embarque ${gate}.`;
+            }
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(message);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.9;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // RELOJ EN TIEMPO REAL
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('clock-display').innerText = `${h}:${m}:${s}`;
+
+            const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+            document.getElementById('date-display').innerText = now.toLocaleDateString('es-ES', options).toUpperCase();
+        }
+
+        // INICIALIZACIÓN
+        setInterval(updateClock, 1000);
+        updateClock();
+        renderFlights();
+    </script>
+</body>
+</html>
